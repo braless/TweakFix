@@ -1,0 +1,17 @@
+# Theos build output
+.theos/
+packages/
+*.deb
+
+# macOS
+.DS_Store
+
+# Large local analysis/debug artifacts
+reverse/
+*.ipa
+TweakFix.dylib
+
+# Local images (not referenced by the tweak source)
+member.jpg
+ticket.jpg
+traffic.jpg

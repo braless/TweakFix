@@ -1,0 +1,8 @@
+Package: com.oaife.tweakfix
+Name: Tweakfix
+Version: 1.2.54
+Architecture: iphoneos-arm
+Description: WeChat request blocker with wildcard URL rules and custom response (Content-Type + body)
+Maintainer: Oaife
+Author: Oaife
+Section: Tweaks
