@@ -3775,6 +3775,43 @@ static NSString *ABForwardSectionTitle(NSInteger section) {
     }
 }
 
+// 卡片背景只放在 backgroundView，不插入 contentView。
+// 这样 textLabel/detailTextLabel、系统箭头、UISwitch 仍使用系统原生布局，
+// 不会被自定义容器裁剪或遮挡。
+@interface ABInsetCardBackgroundView : UIView
+@property (nonatomic, assign) UIEdgeInsets cardInsets;
+@property (nonatomic, strong) UIView *separatorView;
+@end
+
+@implementation ABInsetCardBackgroundView
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (self) {
+        _cardInsets = UIEdgeInsetsMake(0, 16, 0, 16);
+        self.backgroundColor = [UIColor clearColor];
+        self.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        self.userInteractionEnabled = NO;
+    }
+    return self;
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    CGRect cardFrame = UIEdgeInsetsInsetRect(self.bounds, _cardInsets);
+    for (UIView *view in self.subviews) {
+        if (view == _separatorView) continue;
+        view.frame = cardFrame;
+    }
+    if (_separatorView) {
+        CGFloat h = 1.0 / MAX([UIScreen mainScreen].scale, 1.0);
+        _separatorView.frame = CGRectMake(CGRectGetMinX(cardFrame) + 16,
+                                          CGRectGetMaxY(cardFrame) - h,
+                                          CGRectGetWidth(cardFrame) - 32,
+                                          h);
+    }
+}
+@end
+
 // 设置页：微信->我->插件->请求拦截
 @interface APIBlockerSettingsViewController : UITableViewController
 - (instancetype)initWithDisplaySection:(NSInteger)section;
@@ -3801,33 +3838,54 @@ static void ABApplyCardStyle(UITableView *tableView, UITableViewCell *cell, NSIn
     BOOL isFirst = (indexPath.row == 0);
     BOOL isLast = (indexPath.row == rowCount - 1);
     CGFloat radius = 12.0;
-    CGFloat inset = 16.0;
 
     CACornerMask mask = 0;
     if (isFirst) mask |= kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
     if (isLast)  mask |= kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
 
     cell.backgroundColor = [UIColor clearColor];
-    cell.contentView.backgroundColor = ABCardColor();
-    cell.contentView.layer.cornerRadius = radius;
-    if (@available(iOS 11.0, *)) {
-        cell.contentView.layer.maskedCorners = mask;
-        cell.contentView.layer.cornerCurve = kCACornerCurveContinuous;
-    }
-    cell.contentView.layer.masksToBounds = YES;
+    cell.contentView.backgroundColor = [UIColor clearColor];
+    cell.contentView.layer.cornerRadius = 0;
+    cell.contentView.layer.masksToBounds = NO;
 
-    UIView *selected = [[UIView alloc] initWithFrame:cell.contentView.bounds];
-    selected.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    selected.backgroundColor = [UIColor colorWithWhite:0.5 alpha:0.12];
-    selected.layer.cornerRadius = radius;
+    ABInsetCardBackgroundView *background = [[ABInsetCardBackgroundView alloc] initWithFrame:cell.bounds];
+    UIView *card = [[UIView alloc] initWithFrame:CGRectZero];
+    card.backgroundColor = ABCardColor();
+    card.layer.cornerRadius = radius;
     if (@available(iOS 11.0, *)) {
-        selected.layer.maskedCorners = mask;
-        selected.layer.cornerCurve = kCACornerCurveContinuous;
+        card.layer.maskedCorners = mask;
+        card.layer.cornerCurve = kCACornerCurveContinuous;
     }
-    selected.layer.masksToBounds = YES;
+    card.layer.masksToBounds = YES;
+    [background addSubview:card];
+
+    if (!isLast) {
+        UIView *separator = [[UIView alloc] initWithFrame:CGRectZero];
+        if (@available(iOS 13.0, *)) {
+            separator.backgroundColor = [UIColor separatorColor];
+        } else {
+            separator.backgroundColor = [UIColor colorWithWhite:0.9 alpha:1.0];
+        }
+        [card addSubview:separator];
+        background.separatorView = separator;
+    }
+    cell.backgroundView = background;
+
+    ABInsetCardBackgroundView *selected = [[ABInsetCardBackgroundView alloc] initWithFrame:cell.bounds];
+    UIView *selectedCard = [[UIView alloc] initWithFrame:CGRectZero];
+    selectedCard.backgroundColor = [UIColor colorWithWhite:0.5 alpha:0.12];
+    selectedCard.layer.cornerRadius = radius;
+    if (@available(iOS 11.0, *)) {
+        selectedCard.layer.maskedCorners = mask;
+        selectedCard.layer.cornerCurve = kCACornerCurveContinuous;
+    }
+    selectedCard.layer.masksToBounds = YES;
+    [selected addSubview:selectedCard];
     cell.selectedBackgroundView = selected;
 
-    cell.separatorInset = UIEdgeInsetsMake(0, inset, 0, inset);
+    // 系统分隔线已在 tableView 层关闭；这里保持正常 inset，
+    // CGFLOAT_MAX 会让 contentView 宽度变成 0，导致文字全部消失。
+    cell.separatorInset = UIEdgeInsetsMake(0, 16, 0, 16);
     cell.preservesSuperviewLayoutMargins = NO;
     cell.layoutMargins = UIEdgeInsetsMake(0, 28, 0, 28);
 }
@@ -3869,6 +3927,9 @@ static void ABApplyCardStyle(UITableView *tableView, UITableViewCell *cell, NSIn
         _urls = [NSMutableArray array];
     }
     [self.tableView reloadData];
+
+    // 使用卡片内部分隔线，关闭系统分隔线
+    self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
 
     // 顶部内容跟随系统安全区：滚动时列表内容被导航栏遮挡、不穿透状态栏，
     // 首屏也从导航栏下方开始（总开关不会跑到最上面）
