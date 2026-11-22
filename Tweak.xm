@@ -3785,6 +3785,52 @@ static NSString *ABForwardSectionTitle(NSInteger section) {
     NSInteger _displaySection; // <0 表示一级菜单；>=0 只显示该分区
 }
 static char kABNavTranslucentKey;
+static UIColor *ABCardColor(void) {
+    return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *tc) {
+        if (tc.userInterfaceStyle == UIUserInterfaceStyleDark) {
+            return [UIColor colorWithWhite:28.0/255.0 alpha:1.0];
+        }
+        return [UIColor whiteColor];
+    }];
+}
+
+static void ABApplyCardStyle(UITableView *tableView, UITableViewCell *cell, NSIndexPath *indexPath) {
+    if (!cell || !indexPath) return;
+
+    NSInteger rowCount = [tableView numberOfRowsInSection:indexPath.section];
+    BOOL isFirst = (indexPath.row == 0);
+    BOOL isLast = (indexPath.row == rowCount - 1);
+    CGFloat radius = 12.0;
+    CGFloat inset = 16.0;
+
+    CACornerMask mask = 0;
+    if (isFirst) mask |= kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
+    if (isLast)  mask |= kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
+
+    cell.backgroundColor = [UIColor clearColor];
+    cell.contentView.backgroundColor = ABCardColor();
+    cell.contentView.layer.cornerRadius = radius;
+    if (@available(iOS 11.0, *)) {
+        cell.contentView.layer.maskedCorners = mask;
+        cell.contentView.layer.cornerCurve = kCACornerCurveContinuous;
+    }
+    cell.contentView.layer.masksToBounds = YES;
+
+    UIView *selected = [[UIView alloc] initWithFrame:cell.contentView.bounds];
+    selected.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    selected.backgroundColor = [UIColor colorWithWhite:0.5 alpha:0.12];
+    selected.layer.cornerRadius = radius;
+    if (@available(iOS 11.0, *)) {
+        selected.layer.maskedCorners = mask;
+        selected.layer.cornerCurve = kCACornerCurveContinuous;
+    }
+    selected.layer.masksToBounds = YES;
+    cell.selectedBackgroundView = selected;
+
+    cell.separatorInset = UIEdgeInsetsMake(0, inset, 0, inset);
+    cell.preservesSuperviewLayoutMargins = NO;
+    cell.layoutMargins = UIEdgeInsetsMake(0, 28, 0, 28);
+}
 
 - (instancetype)init {
     self = [super initWithStyle:UITableViewStyleGrouped];
@@ -4064,6 +4110,10 @@ static NSString *ABPluginHelpText(void) {
     return flat.length > 0 ? flat : @"（空）";
 }
 
+- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath {
+    ABApplyCardStyle(tableView, cell, indexPath);
+}
+
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     NSInteger row = [self ab_logicalRowForIndexPath:indexPath];
     if (_displaySection < 0 && row >= 1) {
@@ -4074,11 +4124,6 @@ static NSString *ABPluginHelpText(void) {
         }
         nav.preservesSuperviewLayoutMargins = NO;
         nav.layoutMargins = UIEdgeInsetsMake(0, 28, 0, 28);
-        nav.backgroundColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *tc) {
-            return tc.userInterfaceStyle == UIUserInterfaceStyleDark
-                ? [UIColor colorWithRed:17.0/255.0 green:17.0/255.0 blue:17.0/255.0 alpha:1.0]
-                : [UIColor whiteColor];
-        }];
         static NSString *const names[8] = { @"界面", @"语音来电", @"聊天显示", @"拦截响应",
                                             @"浏览器", @"文件管理", @"消息转发 / 本地 API", @"拦截 URL" };
         static NSString *const subs[8]  = { @"卡包 / 已读 / 底栏", @"强制系统来电", @"拍一拍 / 群待办", @"响应格式与内容",
@@ -4100,13 +4145,6 @@ static NSString *ABPluginHelpText(void) {
     // 内容左右向中间缩进（参照参考图：cell 内容左起点约 30pt）
     cell.preservesSuperviewLayoutMargins = NO;
     cell.layoutMargins = UIEdgeInsetsMake(0, 28, 0, 28);
-    // 扁平白 cell（参照参考图，不加投影）；背景用动态色精确匹配参考图日/夜
-    cell.backgroundColor = [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *tc) {
-        if (tc.userInterfaceStyle == UIUserInterfaceStyleDark) {
-            return [UIColor colorWithRed:17.0/255.0 green:17.0/255.0 blue:17.0/255.0 alpha:1.0]; // (17,17,17)
-        }
-        return [UIColor whiteColor];
-    }];
     if (sec == APIBlockerSectionMaster) {
         cell.textLabel.text = @"总开关";
         cell.detailTextLabel.text = nil;
